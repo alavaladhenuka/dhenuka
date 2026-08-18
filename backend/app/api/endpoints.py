@@ -9,16 +9,29 @@ from app.db.session import get_db
 from app.models.inventory import InventoryItem
 from app.models.order import Order
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from google import genai
-from google.genai import types
+
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:  # pragma: no cover
+    genai = None
+    types = None
+
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 router = APIRouter()
 
-# Initialize Gemini Client
-# Note: Ensure GEMINI_API_KEY is set in your environment variables or pass api_key="YOUR_KEY" directly
-client = genai.Client()
+# Initialize Gemini Client only when an API key is available.
+# This keeps the demo app working even without a real Gemini key.
+api_key = os.getenv("GEMINI_API_KEY")
+if api_key and genai is not None:
+    try:
+        client = genai.Client(api_key=api_key)
+    except Exception:
+        client = None
+else:
+    client = None
 
 otp_store = {}
 
@@ -121,6 +134,15 @@ def calculate_ai_expiry_discount(
     CRITICAL: Output ONLY percentage integers (0, 10, 20, or 50) for `discount_pct`. Do NOT return currency amounts or rupees.
     """
 
+  if client is None or types is None:
+    if days_left <= 0.5:
+      return 50, "EXPIRING SOON (50% OFF)"
+    elif days_left <= 15:
+      return 20, "NEAR EXPIRY (20% OFF)"
+    elif days_left <= 30:
+      return 10, "NEAR EXPIRY (10% OFF)"
+    return 0, "NORMAL"
+
   try:
     response = client.models.generate_content(
         model="gemini-2.5-flash",
@@ -133,7 +155,7 @@ def calculate_ai_expiry_discount(
     )
     result = response.parsed
     return result.discount_pct, result.discount_tag
-  except Exception as e:
+  except Exception:
     # Fallback logic if AI API call fails
     if days_left <= 0.5:
       return 50, "EXPIRING SOON (50% OFF)"

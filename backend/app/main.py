@@ -2,7 +2,12 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from google import genai
+
+try:
+    from google import genai
+except ImportError:  # pragma: no cover
+    genai = None
+
 from app.api.endpoints import router as api_router
 
 # 1. Load environment variables from the .env file in backend/
@@ -11,12 +16,15 @@ load_dotenv()
 # 2. Extract API Key safely from environment
 api_key = os.getenv("GEMINI_API_KEY")
 
-# 3. Initialize Gemini Client with explicit API key fallback
-if api_key:
-    client = genai.Client(api_key=api_key)
+# 3. Initialize Gemini Client only when an API key exists.
+# This allows the app to run in local demo mode without the external key.
+if api_key and genai is not None:
+    try:
+        client = genai.Client(api_key=api_key)
+    except Exception:
+        client = None
 else:
-    # Fallback to standard client initialization if environment is pre-configured
-    client = genai.Client()
+    client = None
 
 app = FastAPI(
     title="Smart Warehouse AI API",

@@ -1,4 +1,3 @@
-# REPLACE or ADD this code in backend/main.py
 
 from datetime import datetime
 from fastapi import FastAPI
